@@ -1,0 +1,55 @@
+import os
+import requests
+from flask import Flask, jsonify
+from flask_cors import CORS
+from bs4 import BeautifulSoup
+
+app = Flask(__name__)
+CORS(app)
+
+def get_live_data():
+    matches = []
+    try:
+        # Мы будем пробовать парсить основной спортивный портал
+        url = "https://www.ligapro.ru/table-tennis/"
+        headers = {
+            "User-Agent": "Mozilla/5.0 (iPhone; CPU iPhone OS 16_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/16.0 Mobile/15E148 Safari/604.1"
+        }
+        
+        response = requests.get(url, headers=headers, timeout=10)
+        soup = BeautifulSoup(response.text, 'html.parser')
+        
+        # Поиск матчей по обновленным селекторам
+        items = soup.find_all('div', class_='match-item')
+        
+        for item in items:
+            try:
+                p1 = item.find('div', class_='player1').text.strip()
+                p2 = item.find('div', class_='player2').text.strip()
+                score = item.find('div', class_='score').text.strip()
+                matches.append({
+                    "p1": p1,
+                    "p2": p2,
+                    "score": score,
+                    "set": "ЛИГА ПРО LIVE"
+                })
+            except:
+                continue
+
+        # Если на сайте Лиги Про сейчас пусто (как на вашем скриншоте),
+        # мы добавим автоматический поиск по другому источнику в следующем шаге.
+        if not matches:
+            matches = [{"p1": "Ищу активные", "p2": "матчи...", "score": "0:0", "set": "Авто-поиск"}]
+
+    except Exception as e:
+        matches = [{"p1": "Ошибка", "p2": "связи", "score": "---", "set": "Перезапуск..."}]
+    
+    return matches
+
+@app.route('/api/live')
+def get_live():
+    return jsonify(get_live_data())
+
+if __name__ == "__main__":
+    port = int(os.environ.get("PORT", 5000))
+    app.run(host='0.0.0.0', port=port)
